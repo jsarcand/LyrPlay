@@ -154,3 +154,7 @@ wiki/
 
 # bd gate locks
 *.gate.lock*
+
+# Built by scripts/tailscale/build-framework.sh. Needs Go and full Xcode.
+Frameworks/TailscaleKit.xcframework/
+ThirdParty/libtailscale/swift/build/

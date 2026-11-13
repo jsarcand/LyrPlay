@@ -32,6 +32,13 @@ class SettingsManager: ObservableObject {
     @Published var isBackupServerEnabled: Bool = false
     @Published var automaticFailoverEnabled: Bool = true
     @Published var currentActiveServer: ServerType = .primary
+    /// Off the LAN, join the tailnet inside the app and reach the saved server through it.
+    @Published var tailscaleRemoteEnabled: Bool = true
+    /// MagicDNS name or address confirmed on the tailnet. Empty means search the tailnet.
+    @Published var tailscaleRememberedHost: String = ""
+    /// Session-only. SlimProto, Material and streams use this instead of the saved host.
+    /// Not written to UserDefaults: a relaunch starts from the saved server again.
+    @Published private(set) var sessionRoute: SessionServerRoute?
     @Published var audioFormat: AudioFormat = SettingsManager.defaultAudioFormat
     @Published var enableAppOpenRecovery: Bool = true  // Resume position when app returns from background
 
@@ -227,6 +234,8 @@ class SettingsManager: ObservableObject {
         static let isBackupServerEnabled = "IsBackupServerEnabled"
         static let automaticFailoverEnabled = "AutomaticFailoverEnabled"
         static let currentActiveServer = "CurrentActiveServer"
+        static let tailscaleRemoteEnabled = "TailscaleRemoteEnabled"
+        static let tailscaleRememberedHost = "TailscaleRememberedHost"
         static let audioFormat = "AudioFormat"
         static let enableAppOpenRecovery = "EnableAppOpenRecovery"
         static let keepScreenAwake = "KeepScreenAwake"
@@ -390,6 +399,12 @@ class SettingsManager: ObservableObject {
         backupServerSlimProtoPort = UserDefaults.standard.object(forKey: Keys.backupServerSlimProtoPort) as? Int ?? 3483
         isBackupServerEnabled = UserDefaults.standard.bool(forKey: Keys.isBackupServerEnabled)
         automaticFailoverEnabled = UserDefaults.standard.object(forKey: Keys.automaticFailoverEnabled) as? Bool ?? true
+        if UserDefaults.standard.object(forKey: Keys.tailscaleRemoteEnabled) == nil {
+            tailscaleRemoteEnabled = true
+        } else {
+            tailscaleRemoteEnabled = UserDefaults.standard.bool(forKey: Keys.tailscaleRemoteEnabled)
+        }
+        tailscaleRememberedHost = UserDefaults.standard.string(forKey: Keys.tailscaleRememberedHost) ?? ""
         let activeServerRaw = UserDefaults.standard.integer(forKey: Keys.currentActiveServer)
         currentActiveServer = activeServerRaw == 1 ? .backup : .primary
         // First-run users get the platform default (tvOS: .flac lossless,
@@ -484,6 +499,8 @@ class SettingsManager: ObservableObject {
         UserDefaults.standard.set(backupServerSlimProtoPort, forKey: Keys.backupServerSlimProtoPort)
         UserDefaults.standard.set(isBackupServerEnabled, forKey: Keys.isBackupServerEnabled)
         UserDefaults.standard.set(automaticFailoverEnabled, forKey: Keys.automaticFailoverEnabled)
+        UserDefaults.standard.set(tailscaleRemoteEnabled, forKey: Keys.tailscaleRemoteEnabled)
+        UserDefaults.standard.set(tailscaleRememberedHost, forKey: Keys.tailscaleRememberedHost)
         // currentActiveServer is persisted explicitly via persistActiveServer() (user-initiated
         // switches + full reset only), NOT here — so an automatic failover that changes it
         // in-session is never written to disk and can't overwrite the saved preference. (bd 9iu)
@@ -799,6 +816,10 @@ class SettingsManager: ObservableObject {
         isBackupServerEnabled = false
         automaticFailoverEnabled = true
         currentActiveServer = .primary  // Reset to primary server
+        tailscaleRemoteEnabled = true
+        tailscaleRememberedHost = ""
+        clearSessionRoute()
+        TailscaleConnector.shared.stopQuiet()
 
         // Reset CBass buffer settings to conservative defaults
         flacBufferSeconds = 15
@@ -845,11 +866,33 @@ class SettingsManager: ObservableObject {
     }
     
     // MARK: - Active Server Properties
+    /// Where this session actually connects. The saved host stays unchanged.
+    struct SessionServerRoute: Equatable {
+        var host: String
+        var webPort: Int
+        var slimPort: Int
+        var remoteName: String
+    }
+
+    func setSessionRoute(_ route: SessionServerRoute?) {
+        sessionRoute = route
+        shouldReloadWebView = true
+    }
+
+    func clearSessionRoute() {
+        guard sessionRoute != nil else { return }
+        sessionRoute = nil
+        shouldReloadWebView = true
+    }
+
     var activeServerHost: String {
+        if let sessionRoute { return sessionRoute.host }
         return currentActiveServer == .primary ? serverHost : backupServerHost
     }
 
     var activeServerWebUseHTTPS: Bool {
+        // The tailnet bridge is plaintext on localhost. WireGuard already encrypts it.
+        if sessionRoute != nil { return false }
         return currentActiveServer == .primary ? serverWebUseHTTPS : backupServerWebUseHTTPS
     }
 
@@ -858,10 +901,12 @@ class SettingsManager: ObservableObject {
     }
 
     var activeServerWebPort: Int {
+        if let sessionRoute { return sessionRoute.webPort }
         return currentActiveServer == .primary ? serverWebPort : backupServerWebPort
     }
 
     var activeServerSlimProtoPort: Int {
+        if let sessionRoute { return sessionRoute.slimPort }
         return currentActiveServer == .primary ? serverSlimProtoPort : backupServerSlimProtoPort
     }
 

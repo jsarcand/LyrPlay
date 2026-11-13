@@ -48,6 +48,8 @@ struct ContentView: View {
     private static let offlineBannerHeight: CGFloat = 30
     /// GH#75: hardware volume rocker → external player forwarding
     @StateObject private var volumeRocker = VolumeRockerForwarder()
+    @ObservedObject private var tailscale = TailscaleConnector.shared
+    private static let tailscaleBannerHeight: CGFloat = 36
 
     /// Detect if running as iPad app on Mac (no status bar, so ignore top safe area)
     private var isRunningOnMac: Bool {
@@ -263,6 +265,11 @@ struct ContentView: View {
 
             if showsOfflineBanner {
                 offlineBanner
+                    .zIndex(2)
+            }
+
+            if tailscale.wantsBanner && !isLoading {
+                tailscaleBanner
                     .zIndex(2)
             }
 
@@ -952,7 +959,9 @@ struct ContentView: View {
     // MARK: - Error Overlay (Separate from loading screen)
     /// Material's top padding: the status bar, plus room for the offline banner.
     private var materialTopPad: CGFloat {
-        topInset + (showsOfflineBanner ? Self.offlineBannerHeight : 0)
+        topInset
+            + (showsOfflineBanner ? Self.offlineBannerHeight : 0)
+            + ((tailscale.wantsBanner && !isLoading) ? Self.tailscaleBannerHeight : 0)
     }
 
     private var showsOfflineBanner: Bool {
@@ -1001,6 +1010,45 @@ struct ContentView: View {
         .ignoresSafeArea(.container, edges: .top)
         .transition(.move(edge: .top).combined(with: .opacity))
         .animation(.easeInOut(duration: 0.25), value: offlineStatus?.isPaused)
+    }
+
+    /// First login to the in-app tailnet, then the search for the home server.
+    private var tailscaleBanner: some View {
+        VStack(spacing: 0) {
+            Button {
+                if tailscale.bannerOpensLogin {
+                    tailscale.openLogin()
+                } else if tailscale.phase == .failed {
+                    tailscale.restart()
+                }
+            } label: {
+                HStack(spacing: 6) {
+                    Image(systemName: "lock.shield")
+                    Text(tailscale.bannerTitle)
+                        .fontWeight(.semibold)
+                    Text(tailscale.bannerDetail)
+                    if tailscale.bannerOpensLogin || tailscale.phase == .failed {
+                        Image(systemName: "chevron.right")
+                            .font(.caption2.weight(.semibold))
+                    }
+                }
+                .font(.footnote)
+                .foregroundColor(.white)
+                .lineLimit(1)
+                .minimumScaleFactor(0.7)
+                .padding(.horizontal, 16)
+                .frame(maxWidth: .infinity)
+                .frame(height: Self.tailscaleBannerHeight)
+                .background(Color(red: 0.16, green: 0.39, blue: 0.78))
+            }
+            .buttonStyle(.plain)
+            .disabled(!tailscale.bannerOpensLogin && tailscale.phase != .failed)
+            .padding(.top, topInset + (showsOfflineBanner ? Self.offlineBannerHeight : 0))
+            Spacer()
+        }
+        .ignoresSafeArea(.container, edges: .top)
+        .transition(.move(edge: .top).combined(with: .opacity))
+        .animation(.easeInOut(duration: 0.25), value: tailscale.phase)
     }
 
     private var errorOverlay: some View {

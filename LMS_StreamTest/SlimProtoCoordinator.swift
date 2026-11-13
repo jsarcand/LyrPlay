@@ -522,6 +522,9 @@ class SlimProtoCoordinator: ObservableObject {
         setupAudioCallbacks()
         setupAudioPlayerIntegration()
         setupSyncController()
+        TailscaleConnector.shared.onRouteReady = { [weak self] in
+            self?.connect()
+        }
         replayGainModeObserver = NotificationCenter.default.addObserver(
             forName: .replayGainModeChanged, object: nil, queue: .main) { [weak self] note in
             self?.replayGainModeChanged(note)
@@ -576,7 +579,10 @@ class SlimProtoCoordinator: ObservableObject {
     // MARK: - Public Interface
     func connect() {
         os_log(.info, log: logger, "Starting connection to %{public}s server...", settings.currentActiveServer.displayName)
-        
+        // On a cellular path, or when the saved host is a tailnet name, bring the
+        // embedded node up alongside this attempt. A LAN success cancels it.
+        TailscaleConnector.shared.prepareForConnect()
+
         lastKnownHost = settings.activeServerHost
         lastKnownPort = UInt16(settings.activeServerSlimProtoPort)
         
@@ -1704,6 +1710,9 @@ extension SlimProtoCoordinator: SlimProtoClientDelegate {
 
     func slimProtoDidConnect() {
         os_log(.info, log: logger, "✅ Connection established")
+        if settings.sessionRoute == nil {
+            TailscaleConnector.shared.noteReachableDirectly()
+        }
         lastConnectedAt = Date()
         audibleRecoveryRetries = 0  // retry budget is per connection (bd 6lvg)
         connectionManager.didConnect()
@@ -1909,6 +1918,10 @@ extension SlimProtoCoordinator: SlimProtoConnectionManagerDelegate {
             // CRITICAL: Reset reconnection counter when switching servers
             connectionManager.resetReconnectionAttempts()
         }
+
+        // The saved host did not answer. After a second miss, or immediately on
+        // cellular, the connector searches the tailnet and then reconnects.
+        TailscaleConnector.shared.noteUnreachable()
 
         connectKeepingFreshSocket()
     }

@@ -134,6 +134,9 @@
 				SlimProtoConnectionManager.swift,
 				SlimProtoCoordinator.swift,
 				SyncController.swift,
+				TailscaleConnector.swift,
+				TailscaleLocalBridge.swift,
+				TailscaleRemotePlan.swift,
 				VisualizerEngine.swift,
 				VisualizerPreset.swift,
 			);

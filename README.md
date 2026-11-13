@@ -44,14 +44,20 @@ A Squeezebox player that turns your iPhone, iPad or Apple TV into a high-quality
 
 ## Remote Access
 
-For remote access outside your home network, you'll need a secure VPN solution such as Tailscale.
+On the home network LyrPlay uses the server address you saved. When that address is out of reach, the iOS app can join your tailnet itself: Settings → Server → Remote, **Automatic remote connection** (on by default). The first time, a banner asks you to log in to Tailscale. After that it connects on its own, finds the Lyrion machine, and bridges SlimProto and the web interface to localhost. When the saved server answers on the LAN again, the bridge is dropped.
 
-1. Install Tailscale on your iOS device and your server.
-2. Enable MagicDNS - ensure server and iOS device have MagicDNS enabled.
-3. Enter the MagicDNS name of your server into LyrPlay during app setup.
-4. Listen to LyrPlay on cellular!
+The Lyrion machine, or a subnet router that advertises that machine's LAN, has to be on the same tailnet. A remembered name can be typed under Remote (`server.tailnet.ts.net`). Leaving it blank makes the app look for Lyrion among the other machines on the tailnet.
 
-If you already run LMS behind an HTTPS reverse proxy, turn on **Use HTTPS for web interface** in LyrPlay's server settings.
+Installing the Tailscale app and typing a MagicDNS name still works. If LMS is behind an HTTPS reverse proxy, turn on **Use HTTPS for web interface** in the server settings. That HTTPS setting is not used while the in-app bridge is up: the bridge is plaintext on localhost, and WireGuard already encrypts the tailnet.
+
+The Tailscale library is built on your Mac and is not part of the git tree. A checkout compiles without it and shows "Tailscale isn't in this build" when a remote path is needed. To link it:
+
+1. Install [Go](https://go.dev/dl/) and full Xcode (the Command Line Tools are not enough).
+2. `git submodule update --init ThirdParty/libtailscale`
+3. `scripts/tailscale/build-framework.sh`
+4. In Xcode, add `Frameworks/TailscaleKit.xcframework` to the iOS target and set it to Embed & Sign.
+
+Before an App Store archive, add Apple's required-reason codes for the file-timestamp and system-boot-time APIs that the Go runtime uses. The codes are in [Apple's privacy-manifest documentation](https://developer.apple.com/documentation/bundleresources/privacy_manifest_files/describing_use_of_required_reason_api). This repository does not guess them.
 
 **Important**: Direct internet exposure of LMS servers is not recommended due to security risks.
 

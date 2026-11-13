@@ -603,6 +603,9 @@ private struct OfflineDownloadRing: View {
 
 struct ServerSettingsView: View {
     @StateObject private var settings = SettingsManager.shared
+    #if os(iOS)
+    @ObservedObject private var tailscale = TailscaleConnector.shared
+    #endif
     @State private var showingConnectionTest = false
     @State private var showingMACInfo = false
 
@@ -624,6 +627,10 @@ struct ServerSettingsView: View {
             } header: {
                 Text("Server")
             }
+
+            #if os(iOS)
+            tailscaleSection
+            #endif
 
             Section {
                 Toggle("Use Backup Server", isOn: $settings.isBackupServerEnabled)
@@ -2269,3 +2276,39 @@ struct IconButton: View {
         return nil
     }
 }
+
+#if os(iOS)
+extension ServerSettingsView {
+    var tailscaleSection: some View {
+        Section {
+            Toggle("Automatic remote connection", isOn: $settings.tailscaleRemoteEnabled)
+                .onChange(of: settings.tailscaleRemoteEnabled) { _ in
+                    settings.saveSettings()
+                    if settings.tailscaleRemoteEnabled {
+                        TailscaleConnector.shared.restart()
+                    } else {
+                        TailscaleConnector.shared.userDisabled()
+                    }
+                }
+            TextField("server.tailnet.ts.net", text: $settings.tailscaleRememberedHost)
+                .textInputAutocapitalization(.never)
+                .autocorrectionDisabled(true)
+                .onChange(of: settings.tailscaleRememberedHost) { _ in
+                    settings.saveSettings()
+                }
+            if let name = tailscale.connectedName {
+                Text(name)
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+            }
+            Button("Reconnect") {
+                TailscaleConnector.shared.restart()
+            }
+        } header: {
+            Text("Remote")
+        } footer: {
+            Text("When the saved server is out of reach, LyrPlay joins your tailnet itself and connects to the Lyrion machine. The first time, log in to Tailscale. After that it connects on its own. The server, or a subnet router for its LAN, has to be on the same tailnet.")
+        }
+    }
+}
+#endif

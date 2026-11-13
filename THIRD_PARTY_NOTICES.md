@@ -24,3 +24,10 @@ BASS and its add-ons include decoders from these projects:
 - **Source:** <https://github.com/robbiehanson/CocoaAsyncSocket>, installed with CocoaPods
 - **In this repository:** `Pods/CocoaAsyncSocket`
 - **Licence:** public domain, or BSD at the user's choice. The full text is in [`Pods/CocoaAsyncSocket/LICENSE.txt`](Pods/CocoaAsyncSocket/LICENSE.txt).
+
+## libtailscale
+
+- **Copyright:** © 2023 Tailscale & AUTHORS
+- **Source:** <https://github.com/tailscale/libtailscale>, checked out as the `ThirdParty/libtailscale` submodule
+- **In this repository:** the Swift and C sources under `ThirdParty/libtailscale`. `scripts/tailscale/build-framework.sh` builds `Frameworks/TailscaleKit.xcframework` locally. That binary is not committed.
+- **Licence:** BSD 3-clause. The full text is in [`ThirdParty/libtailscale/LICENSE`](ThirdParty/libtailscale/LICENSE). LyrPlay's MIT licence does not cover it.
